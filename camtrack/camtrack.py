@@ -98,7 +98,7 @@ def find_initial_frames(corner_storage,
                     if np.arccos(median_cos) > 5:
                         continue
                     am_cr = 600
-                    if len(correspondences.ids) > 2000:
+                    if len(correspondences.ids) > 600:
                         am_cr = 6000
                     metr = np.arccos(median_cos) / 180 - retval * 0.1 + (i + j) * 0.01 - len(correspondences.ids) / am_cr
                     if metr  < best_median_cos_r: # - np.log(abs(j - i)) * 0.2
