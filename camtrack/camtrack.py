@@ -79,7 +79,7 @@ def find_initial_frames(corner_storage,
     # if len(frame_sequence) == 323:  # house_free_motion
     #        min1, min2 = 20, 50
     if n1 != -1:
-        retval, Ro, to = calculate_for_2_frames(intrinsic_mat, corner_storage, n1, n2, rgb_sequence)
+        retval, Ro, to = calculate_for_2_frames(intrinsic_mat, corner_storage, n1, n2, rgb_sequence, 0.1)
     while n1 == -1:
         if n1 != -1:
             break
@@ -99,7 +99,7 @@ def find_initial_frames(corner_storage,
                         continue
                     if np.arccos(median_cos) / 180 - retval * 0.1 + (i + j) * 0.01  < best_median_cos_r: # - np.log(abs(j - i)) * 0.2
                         n1, n2 = i, j
-                        best_median_cos_r = median_cos - retval * 0.1
+                        best_median_cos_r = np.arccos(median_cos) / 180 - retval * 0.1 + (i + j) * 0.01
                         Ro = R
                         to = t
         if n1 == -1:
@@ -353,7 +353,8 @@ def track_and_calc_colors(camera_parameters: CameraParameters,
             continue
 
         for j in ids_outliers:
-            storage_points_3d[2][np.argwhere(storage_points_3d[1] == j)[0, 0]] = False
+            if len(storage_points_3d[2][storage_points_3d[2] == False]) > 10:
+                storage_points_3d[2][np.argwhere(storage_points_3d[1] == j)[0, 0]] = False
         # if i > 3 and np.linalg.norm(r_vec - r_vec_prev) > 0.001: #0.00115:
         #     r_vec = r_vec_prev
         #     t_vec = t_vec_prev
