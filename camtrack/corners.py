@@ -110,7 +110,7 @@ def _build_impl(frame_sequence: pims.FramesSequence,
 
     if len(frame_sequence) == 23:  # ironman_translation_fast
         N = 6000
-        alpha = 0.01
+        alpha = 0.05
 
     if len(frame_sequence) == 23:  # ironman_translation_fast
         N = 6000
