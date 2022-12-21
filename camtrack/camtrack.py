@@ -22,7 +22,9 @@ from _camtrack import (
     build_correspondences,
     triangulate_correspondences,
     TriangulationParameters,
-    rodrigues_and_translation_to_view_mat3x4, view_mat3x4_to_rodrigues_and_translation, eye3x4
+    rodrigues_and_translation_to_view_mat3x4, view_mat3x4_to_rodrigues_and_translation,
+    eye3x4,
+    _calc_triangulation_angle_mask
 )
 
 
@@ -40,49 +42,70 @@ def calculate_for_2_frames(intrinsic_mat: np.ndarray,
                            corner_storage: CornerStorage,
                            first_frame: int,
                            second_frame: int,
-                           rgb_sequence):
+                           rgb_sequence,
+                           default_mean=0.6):
     correspondences = build_correspondences(corner_storage[first_frame],
                                             corner_storage[second_frame])
     if len(correspondences.ids) < 5:
-        return -1, None, None
+        return -3, None, None
     H, mask_homography = cv2.findHomography(correspondences.points_1, correspondences.points_2, cv2.RANSAC)
 
     E, mask_essential = cv2.findEssentialMat(correspondences.points_1, correspondences.points_2,
                                              intrinsic_mat, cv2.RANSAC, 0.999, 1.0)
     if mask_homography.mean() > mask_essential.mean():
-        return -1, None, None
+        return -3, None, None
 
     essential_inliers_idx = np.arange(len(mask_essential))[mask_essential.flatten().astype(dtype=bool)]
 
     retval, R, t, mask = cv2.recoverPose(E, correspondences.points_1[essential_inliers_idx],
                                          correspondences.points_2[essential_inliers_idx], intrinsic_mat)
 
-    rret = mask_essential.mean() - mask_homography.mean()
-    if len(rgb_sequence) == 99:
-        rret = mask_essential.mean() - mask_homography.mean() * 0.45 - np.log(second_frame) * 0.01
-    return  rret , R, t
+    if  mask_essential.mean() - mask_homography.mean() * 0.5 < default_mean:
+        return -3, None, None
+    return mask_essential.mean() - mask_homography.mean() * 0.5, R, t
 
 
 def find_initial_frames(corner_storage,
-                      intrinsic_mat,
-                        rgb_sequence):
+                        intrinsic_mat,
+                        rgb_sequence,
+                        n1=-1,
+                        n2=-1):
     retval_default = 0
-    n1 = -1
-    n2 = -1
+    best_median_cos_r = 2
     Ro, to = None, None
-    for i in range(0, min(40, len(corner_storage) // 4), 4):
-        for j in range(i + 5, min(100, len(corner_storage) // 2), 4):
-            retval, R, t = calculate_for_2_frames(intrinsic_mat, corner_storage, i, j, rgb_sequence)
-            if retval > retval_default:
-                n1, n2 = i ,j
-                retval_default = retval
-                Ro = R
-                to = t
-    # if len(rgb_sequence) == 99:
-    #     n1, n2 = 5, 20
-    #     retval, Ro, to = calculate_for_2_frames(intrinsic_mat, corner_storage, 5, 20)
+    def_mean = 0.6
+    min1 = 40
+    min2 = 100
+    # if len(frame_sequence) == 323:  # house_free_motion
+    #        min1, min2 = 20, 50
+    if n1 != -1:
+        retval, Ro, to = calculate_for_2_frames(intrinsic_mat, corner_storage, n1, n2, rgb_sequence)
+    while n1 == -1:
+        if n1 != -1:
+            break
+        for i in range(0, min(min1, len(corner_storage) // 4), 1):
+            for j in range(i + 2, min(min2, len(corner_storage) // 2), 1):
+                retval, R, t = calculate_for_2_frames(intrinsic_mat, corner_storage, i, j, rgb_sequence, def_mean)
+                if retval > -3:
+                    correspondences = build_correspondences(corner_storage[i],
+                                                            corner_storage[j])
+                    _, _, median_cos = triangulate_correspondences(correspondences,
+                                                                   eye3x4(),
+                                                                   pose_to_view_mat3x4(Pose(R.T, R.T @ -t)),
+                                                                   intrinsic_mat,
+                                                                   TriangulationParameters(100, 0, 0)
+                                                                   )
+                    if np.arccos(median_cos) > 5:
+                        continue
+                    if np.arccos(median_cos) / 180 - retval * 0.1 + (i + j) * 0.01  < best_median_cos_r: # - np.log(abs(j - i)) * 0.2
+                        n1, n2 = i, j
+                        best_median_cos_r = median_cos - retval * 0.1
+                        Ro = R
+                        to = t
+        if n1 == -1:
+            def_mean /= 2
+    print("инициализация произошла на кадрах:", n1, n2)
     return (n1, view_mat3x4_to_pose(eye3x4())), (n2, Pose(Ro.T, Ro.T @ -to))
-
 
 
 def track_and_calc_colors(camera_parameters: CameraParameters,
@@ -286,7 +309,7 @@ def track_and_calc_colors(camera_parameters: CameraParameters,
             mats = []
             for i_retr in arr_frames:
                 retval, r_vec, t_vec, ids_outliers = pnp_by_frame_number(storage_points_3d, i_retr,
-                                                                                         False)
+                                                                         False)
                 if not retval:
                     print("Не получилось решить PnP в методе ретриангуляции")
                 mats.append(intrinsic_mat @ rodrigues_and_translation_to_view_mat3x4(r_vec, t_vec))
@@ -297,7 +320,6 @@ def track_and_calc_colors(camera_parameters: CameraParameters,
                 storage_points_3d[0][el_number] = np.array(point_3d[0:3])
         else:  # надо что-то делать
             print("не те кадры для ретриангуляции")
-
 
     # storage_points_3d_old = storage_points_3d
     # min_retr = min_

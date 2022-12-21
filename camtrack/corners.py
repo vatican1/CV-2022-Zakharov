@@ -78,7 +78,7 @@ def _build_impl(frame_sequence: pims.FramesSequence,
     N = 600
     alpha = 0.32
     mask_size = 5
-    maxLevel=4
+    maxLevel = 4
     cc = 0.1
     if len(frame_sequence) < 30:
         N = 3000
@@ -88,15 +88,37 @@ def _build_impl(frame_sequence: pims.FramesSequence,
         N = 5000
         alpha = 0.1
 
-    if len(frame_sequence) == 99:
-        alpha = 0.015
-        maxLevel = 5
+    if len(frame_sequence) == 99: # room
+        N = 2000
+        alpha = 0.05
+        maxLevel = 4
         cc = 0.01
-        mask_size = 10
+        mask_size = 5
+
+    if len(frame_sequence) == 478:  # fox_head_full
+        pass
+
+    if len(frame_sequence) == 98:  # fox_head_short
+        pass
+
+    if len(frame_sequence) == 323:  # house_free_motion
+        N = 600
+        alpha = 0.32
+        mask_size = 5
+        maxLevel = 4
+        cc = 0.1
+
+    if len(frame_sequence) == 23:  # ironman_translation_fast
+        N = 6000
+        alpha = 0.01
+
+    if len(frame_sequence) == 23:  # ironman_translation_fast
+        N = 6000
+        alpha = 0.01
 
     ids_amount = N
     image_0 = frame_sequence[0]
-    arr_corners = cv2.goodFeaturesToTrack(image_0, N, alpha, mask_size)
+    arr_corners = cv2.goodFeaturesToTrack(image_0, N, alpha / 4, mask_size)
     corners_0 = FrameCorners(
         np.array(range(len(arr_corners))),  # id треков
         np.array(arr_corners),  # положение уголков
@@ -104,7 +126,7 @@ def _build_impl(frame_sequence: pims.FramesSequence,
     )
 
     builder.set_corners_at_frame(0, corners_0)
-    lks = dict(winSize=(25, 25), maxLevel=maxLevel, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, cc))
+    lks = dict(winSize=(20, 20), maxLevel=maxLevel, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, cc))
     for frame, image_1 in enumerate(frame_sequence[1:], 1):
 
         p1, st, err = cv2.calcOpticalFlowPyrLK(
